@@ -38,9 +38,14 @@ export class SessionsService {
 
   private async updateSceneSession(userId: string, sceneName: string, newContent: string): Promise<void> {
     const sceneSessionName = `#SCENENAMESESSION`;
+    
+    // Find the scene session that matches both the scene name and the special session name
     const existingSceneSession = await this.sessionModel.findOne({
       userId,
-      content: { $regex: `"SessionName": "${sceneSessionName}"` }
+      content: { 
+        $regex: `"SessionName": "${sceneSessionName}".*"SceneName": "${sceneName}"`,
+        $options: 's' // This allows the regex to match across multiple lines
+      }
     });
 
     if (existingSceneSession) {
