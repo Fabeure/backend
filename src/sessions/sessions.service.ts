@@ -25,12 +25,13 @@ export class SessionsService {
     const metadata = JSON.parse(metadataJson);
     const sceneName = metadata.SceneName;
 
-    // Get all data entries and their stimulus types and emotion labels
+    // Get all data entries and their stimulus types, emotion labels, and feature names
     const dataEntries = lines.slice(11).filter(line => line.trim() !== '');
     if (dataEntries.length > 0) {
-      // Get unique stimulus types and emotion labels from all entries
+      // Get unique stimulus types, emotion labels, and feature names from all entries
       const stimulusTypes = new Set<number>();
       const emotionLabels = new Set<number>();
+      const featureNames = new Set<string>();
       
       dataEntries.forEach(entry => {
         try {
@@ -40,6 +41,9 @@ export class SessionsService {
           }
           if (parsedEntry.Emotion?.Label !== undefined) {
             emotionLabels.add(parsedEntry.Emotion.Label);
+          }
+          if (parsedEntry.FeatureName !== undefined) {
+            featureNames.add(parsedEntry.FeatureName);
           }
         } catch (e) {
           console.error('Error parsing data entry:', e);
@@ -59,6 +63,11 @@ export class SessionsService {
       // Update emotion label sessions for each unique emotion label
       for (const emotionLabel of emotionLabels) {
         await this.updateEmotionLabelSession(userId, emotionLabel, content);
+      }
+
+      // Update feature name sessions for each unique feature name
+      for (const featureName of featureNames) {
+        await this.updateFeatureNameSession(userId, featureName, content);
       }
     }
 
@@ -288,6 +297,86 @@ export class SessionsService {
         content: combinedContent
       });
       await newEmotionSession.save();
+    }
+  }
+
+  private async updateFeatureNameSession(userId: string, featureName: string, newContent: string): Promise<void> {
+    const featureSessionName = `#FEATURENAMESESSION`;
+    
+    // Find the feature name session that matches feature name and special session name
+    const existingFeatureSession = await this.sessionModel.findOne({
+      userId,
+      content: { 
+        $regex: `"SessionName": "${featureSessionName}".*"FeatureName":"${featureName}"`,
+        $options: 's'
+      }
+    });
+
+    if (existingFeatureSession) {
+      // Extract data entries from both existing and new content
+      const existingLines = existingFeatureSession.content.split('\n');
+      const newLines = newContent.split('\n');
+      
+      // Get metadata from existing session
+      const metadataLines = existingLines.slice(0, 11);
+      
+      // Get data entries from both sessions
+      const existingDataEntries = existingLines.slice(11).filter(line => line.trim() !== '');
+      const newDataEntries = newLines.slice(11)
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.FeatureName === featureName;
+          } catch (e) {
+            return false;
+          }
+        });
+      
+      // Combine all data entries
+      const combinedDataEntries = [...existingDataEntries, ...newDataEntries];
+      
+      // Create new content with original metadata and combined data entries
+      const updatedContent = [
+        ...metadataLines,
+        ...combinedDataEntries
+      ].join('\n');
+
+      existingFeatureSession.content = updatedContent;
+      await existingFeatureSession.save();
+    } else {
+      // Create new feature name session
+      const lines = newContent.split('\n');
+      const metadataLines = lines.slice(0, 11);
+      const metadataJson = metadataLines
+        .map(line => line.replace('#SESSION', '').trim())
+        .join('\n');
+      const metadata = JSON.parse(metadataJson);
+      
+      // Update metadata for feature name session
+      metadata.SessionName = featureSessionName;
+      const updatedMetadata = `#SESSION ${JSON.stringify(metadata, null, 2)}`;
+      
+      // Get data entries from the new session that match this feature name
+      const dataEntries = lines.slice(11)
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.FeatureName === featureName;
+          } catch (e) {
+            return false;
+          }
+        });
+      
+      // Create new content with updated metadata and filtered data entries
+      const combinedContent = [updatedMetadata, ...dataEntries].join('\n');
+
+      const newFeatureSession = new this.sessionModel({
+        userId,
+        content: combinedContent
+      });
+      await newFeatureSession.save();
     }
   }
 } 
