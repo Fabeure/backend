@@ -2,12 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Session } from './schemas/session.schema';
+import { TrackableObjects } from './schemas/trackable-object.schema';
 
 @Injectable()
 export class SessionsService {
   constructor(
     @InjectModel(Session.name) private sessionModel: Model<Session>,
+    @InjectModel(TrackableObjects.name) private trackableObjectsModel: Model<TrackableObjects>,
   ) {}
+
+
+    async createTrackableObjects(userId: string, content: string): Promise<TrackableObjects> {
+    const trackableObjects = new this.trackableObjectsModel({
+      userId,
+      content,
+    });
+    return trackableObjects.save();
+  }
+
+  async getTrackableObjects(userId: string): Promise<TrackableObjects[]> {
+    return this.trackableObjectsModel.find({ userId }).exec();
+  }
 
   async create(userId: string, content: string): Promise<Session> {
     const createdSession = new this.sessionModel({
