@@ -25,10 +25,15 @@ export class SessionsService {
     const metadata = JSON.parse(metadataJson);
     const sceneName = metadata.SceneName;
 
-    // Get all data entries and their stimulus types, emotion labels, and feature names
+    // Get all data entries
     const dataEntries = lines.slice(11).filter(line => line.trim() !== '');
     if (dataEntries.length > 0) {
-      // Get unique stimulus types, emotion labels, and feature names from all entries
+      // Update scene session if there's a scene name
+      if (sceneName) {
+        await this.updateSceneSession(userId, sceneName, content);
+      }
+
+      // Get unique stimulus types and emotion labels from all entries
       const stimulusTypes = new Set<number>();
       const emotionLabels = new Set<number>();
       const featureNames = new Set<string>();
@@ -49,11 +54,6 @@ export class SessionsService {
           console.error('Error parsing data entry:', e);
         }
       });
-      
-      // Update scene session if there's a scene name
-      if (sceneName) {
-        await this.updateSceneSession(userId, sceneName, content);
-      }
       
       // Update stimulus type sessions for each unique stimulus type
       for (const stimulusType of stimulusTypes) {
@@ -227,12 +227,13 @@ export class SessionsService {
     const existingEmotionSession = await this.sessionModel.findOne({
       userId,
       content: { 
-        $regex: `"SessionName": "${emotionSessionName}".*"EmotionLabel":${emotionLabel}`,
+        $regex: `"SessionName":\\s*"#EMOTIONLABELSESSION".*"Emotion":\\s*\\{[^}]*"Label":\\s*${emotionLabel}`,
         $options: 's'
       }
     });
 
     if (existingEmotionSession) {
+      console.log("found emotion label session");
       // Extract data entries from both existing and new content
       const existingLines = existingEmotionSession.content.split('\n');
       const newLines = newContent.split('\n');
@@ -265,6 +266,7 @@ export class SessionsService {
       existingEmotionSession.content = updatedContent;
       await existingEmotionSession.save();
     } else {
+      console.log("didn't find emotion label session");
       // Create new emotion label session
       const lines = newContent.split('\n');
       const metadataLines = lines.slice(0, 11);
