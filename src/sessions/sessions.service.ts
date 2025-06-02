@@ -25,8 +25,31 @@ export class SessionsService {
     const metadata = JSON.parse(metadataJson);
     const sceneName = metadata.SceneName;
 
-    if (sceneName) {
-      await this.updateSceneSession(userId, sceneName, content);
+    // Get all data entries and their stimulus types
+    const dataEntries = lines.slice(11).filter(line => line.trim() !== '');
+    if (dataEntries.length > 0) {
+      // Get unique stimulus types from all entries
+      const stimulusTypes = new Set<number>();
+      dataEntries.forEach(entry => {
+        try {
+          const parsedEntry = JSON.parse(entry);
+          if (parsedEntry.StimulusType !== undefined) {
+            stimulusTypes.add(parsedEntry.StimulusType);
+          }
+        } catch (e) {
+          console.error('Error parsing data entry:', e);
+        }
+      });
+      
+      // Update scene session if there's a scene name
+      if (sceneName) {
+        await this.updateSceneSession(userId, sceneName, content);
+      }
+      
+      // Update stimulus type sessions for each unique stimulus type
+      for (const stimulusType of stimulusTypes) {
+        await this.updateStimulusTypeSession(userId, stimulusType, content);
+      }
     }
 
     return savedSession;
@@ -39,12 +62,12 @@ export class SessionsService {
   private async updateSceneSession(userId: string, sceneName: string, newContent: string): Promise<void> {
     const sceneSessionName = `#SCENENAMESESSION`;
     
-    // Find the scene session that matches both the scene name and the special session name
+    // Find the scene session that matches scene name and special session name
     const existingSceneSession = await this.sessionModel.findOne({
       userId,
       content: { 
         $regex: `"SessionName": "${sceneSessionName}".*"SceneName": "${sceneName}"`,
-        $options: 's' // This allows the regex to match across multiple lines
+        $options: 's'
       }
     });
 
@@ -95,6 +118,86 @@ export class SessionsService {
         content: combinedContent
       });
       await newSceneSession.save();
+    }
+  }
+
+  private async updateStimulusTypeSession(userId: string, stimulusType: number, newContent: string): Promise<void> {
+    const stimulusSessionName = `#STIMULUSTYPESESSION`;
+    
+    // Find the stimulus type session that matches stimulus type and special session name
+    const existingStimulusSession = await this.sessionModel.findOne({
+      userId,
+      content: { 
+        $regex: `"SessionName": "${stimulusSessionName}".*"StimulusType":${stimulusType}`,
+        $options: 's'
+      }
+    });
+
+    if (existingStimulusSession) {
+      // Extract data entries from both existing and new content
+      const existingLines = existingStimulusSession.content.split('\n');
+      const newLines = newContent.split('\n');
+      
+      // Get metadata from existing session
+      const metadataLines = existingLines.slice(0, 11);
+      
+      // Get data entries from both sessions
+      const existingDataEntries = existingLines.slice(11).filter(line => line.trim() !== '');
+      const newDataEntries = newLines.slice(11)
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.StimulusType === stimulusType;
+          } catch (e) {
+            return false;
+          }
+        });
+      
+      // Combine all data entries
+      const combinedDataEntries = [...existingDataEntries, ...newDataEntries];
+      
+      // Create new content with original metadata and combined data entries
+      const updatedContent = [
+        ...metadataLines,
+        ...combinedDataEntries
+      ].join('\n');
+
+      existingStimulusSession.content = updatedContent;
+      await existingStimulusSession.save();
+    } else {
+      // Create new stimulus type session
+      const lines = newContent.split('\n');
+      const metadataLines = lines.slice(0, 11);
+      const metadataJson = metadataLines
+        .map(line => line.replace('#SESSION', '').trim())
+        .join('\n');
+      const metadata = JSON.parse(metadataJson);
+      
+      // Update metadata for stimulus type session
+      metadata.SessionName = stimulusSessionName;
+      const updatedMetadata = `#SESSION ${JSON.stringify(metadata, null, 2)}`;
+      
+      // Get data entries from the new session that match this stimulus type
+      const dataEntries = lines.slice(11)
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.StimulusType === stimulusType;
+          } catch (e) {
+            return false;
+          }
+        });
+      
+      // Create new content with updated metadata and filtered data entries
+      const combinedContent = [updatedMetadata, ...dataEntries].join('\n');
+
+      const newStimulusSession = new this.sessionModel({
+        userId,
+        content: combinedContent
+      });
+      await newStimulusSession.save();
     }
   }
 } 
