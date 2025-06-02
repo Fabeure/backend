@@ -85,12 +85,13 @@ export class SessionsService {
     const existingSceneSession = await this.sessionModel.findOne({
       userId,
       content: { 
-        $regex: `"SessionName": "${sceneSessionName}".*"SceneName": "${sceneName}"`,
-        $options: 's'
+        $regex: `^#SESSION\\s*{[\\s\\S]*?"SessionName":\\s*"${sceneSessionName}"[\\s\\S]*?"SceneName":\\s*"${sceneName}"`,
+        $options: 'm'
       }
     });
 
     if (existingSceneSession) {
+      console.log("found scene session");
       // Extract data entries from both existing and new content
       const existingLines = existingSceneSession.content.split('\n');
       const newLines = newContent.split('\n');
@@ -114,6 +115,7 @@ export class SessionsService {
       existingSceneSession.content = updatedContent;
       await existingSceneSession.save();
     } else {
+      console.log("not found scene session");
       // Create new scene session
       const lines = newContent.split('\n');
       const metadataLines = lines.slice(0, 11);
