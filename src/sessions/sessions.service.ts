@@ -8,8 +8,16 @@ export class SessionsService {
   constructor(
     @InjectModel(Session.name) private sessionModel: Model<Session>,
   ) {}
-  
-  async findAll(): Promise<Session[]> {
-    return this.sessionModel.find().exec();
+
+  async create(userId: string, content: string): Promise<Session> {
+    const createdSession = new this.sessionModel({
+      userId,
+      content,
+    });
+    return createdSession.save();
+  }
+
+  async findAllByUserId(userId: string): Promise<Session[]> {
+    return this.sessionModel.find({ userId }).exec();
   }
 } 
