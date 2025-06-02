@@ -25,16 +25,21 @@ export class SessionsService {
     const metadata = JSON.parse(metadataJson);
     const sceneName = metadata.SceneName;
 
-    // Get all data entries and their stimulus types
+    // Get all data entries and their stimulus types and emotion labels
     const dataEntries = lines.slice(11).filter(line => line.trim() !== '');
     if (dataEntries.length > 0) {
-      // Get unique stimulus types from all entries
+      // Get unique stimulus types and emotion labels from all entries
       const stimulusTypes = new Set<number>();
+      const emotionLabels = new Set<number>();
+      
       dataEntries.forEach(entry => {
         try {
           const parsedEntry = JSON.parse(entry);
           if (parsedEntry.StimulusType !== undefined) {
             stimulusTypes.add(parsedEntry.StimulusType);
+          }
+          if (parsedEntry.Emotion?.Label !== undefined) {
+            emotionLabels.add(parsedEntry.Emotion.Label);
           }
         } catch (e) {
           console.error('Error parsing data entry:', e);
@@ -49,6 +54,11 @@ export class SessionsService {
       // Update stimulus type sessions for each unique stimulus type
       for (const stimulusType of stimulusTypes) {
         await this.updateStimulusTypeSession(userId, stimulusType, content);
+      }
+
+      // Update emotion label sessions for each unique emotion label
+      for (const emotionLabel of emotionLabels) {
+        await this.updateEmotionLabelSession(userId, emotionLabel, content);
       }
     }
 
@@ -198,6 +208,86 @@ export class SessionsService {
         content: combinedContent
       });
       await newStimulusSession.save();
+    }
+  }
+
+  private async updateEmotionLabelSession(userId: string, emotionLabel: number, newContent: string): Promise<void> {
+    const emotionSessionName = `#EMOTIONLABELSESSION`;
+    
+    // Find the emotion label session that matches emotion label and special session name
+    const existingEmotionSession = await this.sessionModel.findOne({
+      userId,
+      content: { 
+        $regex: `"SessionName": "${emotionSessionName}".*"EmotionLabel":${emotionLabel}`,
+        $options: 's'
+      }
+    });
+
+    if (existingEmotionSession) {
+      // Extract data entries from both existing and new content
+      const existingLines = existingEmotionSession.content.split('\n');
+      const newLines = newContent.split('\n');
+      
+      // Get metadata from existing session
+      const metadataLines = existingLines.slice(0, 11);
+      
+      // Get data entries from both sessions
+      const existingDataEntries = existingLines.slice(11).filter(line => line.trim() !== '');
+      const newDataEntries = newLines.slice(11)
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.Emotion?.Label === emotionLabel;
+          } catch (e) {
+            return false;
+          }
+        });
+      
+      // Combine all data entries
+      const combinedDataEntries = [...existingDataEntries, ...newDataEntries];
+      
+      // Create new content with original metadata and combined data entries
+      const updatedContent = [
+        ...metadataLines,
+        ...combinedDataEntries
+      ].join('\n');
+
+      existingEmotionSession.content = updatedContent;
+      await existingEmotionSession.save();
+    } else {
+      // Create new emotion label session
+      const lines = newContent.split('\n');
+      const metadataLines = lines.slice(0, 11);
+      const metadataJson = metadataLines
+        .map(line => line.replace('#SESSION', '').trim())
+        .join('\n');
+      const metadata = JSON.parse(metadataJson);
+      
+      // Update metadata for emotion label session
+      metadata.SessionName = emotionSessionName;
+      const updatedMetadata = `#SESSION ${JSON.stringify(metadata, null, 2)}`;
+      
+      // Get data entries from the new session that match this emotion label
+      const dataEntries = lines.slice(11)
+        .filter(line => line.trim() !== '')
+        .filter(line => {
+          try {
+            const entry = JSON.parse(line);
+            return entry.Emotion?.Label === emotionLabel;
+          } catch (e) {
+            return false;
+          }
+        });
+      
+      // Create new content with updated metadata and filtered data entries
+      const combinedContent = [updatedMetadata, ...dataEntries].join('\n');
+
+      const newEmotionSession = new this.sessionModel({
+        userId,
+        content: combinedContent
+      });
+      await newEmotionSession.save();
     }
   }
 } 
