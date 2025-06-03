@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Session } from './schemas/session.schema';
+import { use } from 'passport';
 
 @Injectable()
 export class SessionsService {
@@ -75,7 +76,15 @@ export class SessionsService {
   }
 
   async findAllByUserId(userId: string): Promise<Session[]> {
-    return this.sessionModel.find({ userId }).exec();
+    console.log('Searching for userId:', userId); // Debug log
+    try {
+      const sessions = await this.sessionModel.find({ userId }).exec();
+      console.log('Found sessions:', sessions); // Debug log
+      return sessions;
+    } catch (error) {
+      console.error('Error finding sessions:', error);
+      throw error;
+    }
   }
 
   private async updateSceneSession(userId: string, sceneName: string, newContent: string): Promise<void> {
