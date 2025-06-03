@@ -5,6 +5,6 @@ export default () => ({
   },
   jwt: {
     secret: 'your-secret-key',
-    expiresIn: '1d',
+    expiresIn: '10d',
   },
 });
