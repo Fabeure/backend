@@ -2,27 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Session } from './schemas/session.schema';
-import { TrackableObjects } from './schemas/trackable-object.schema';
 
 @Injectable()
 export class SessionsService {
   constructor(
     @InjectModel(Session.name) private sessionModel: Model<Session>,
-    @InjectModel(TrackableObjects.name) private trackableObjectsModel: Model<TrackableObjects>,
   ) {}
-
-
-    async createTrackableObjects(userId: string, content: string): Promise<TrackableObjects> {
-    const trackableObjects = new this.trackableObjectsModel({
-      userId,
-      content,
-    });
-    return trackableObjects.save();
-  }
-
-  async getTrackableObjects(userId: string): Promise<TrackableObjects[]> {
-    return this.trackableObjectsModel.find({ userId }).exec();
-  }
 
   async create(userId: string, content: string): Promise<Session> {
     const createdSession = new this.sessionModel({
@@ -106,7 +91,6 @@ export class SessionsService {
     });
 
     if (existingSceneSession) {
-      console.log("found scene session");
       // Extract data entries from both existing and new content
       const existingLines = existingSceneSession.content.split('\n');
       const newLines = newContent.split('\n');
@@ -130,7 +114,6 @@ export class SessionsService {
       existingSceneSession.content = updatedContent;
       await existingSceneSession.save();
     } else {
-      console.log("not found scene session");
       // Create new scene session
       const lines = newContent.split('\n');
       const metadataLines = lines.slice(0, 11);
@@ -250,7 +233,6 @@ export class SessionsService {
     });
 
     if (existingEmotionSession) {
-      console.log("found emotion label session");
       // Extract data entries from both existing and new content
       const existingLines = existingEmotionSession.content.split('\n');
       const newLines = newContent.split('\n');
@@ -283,7 +265,6 @@ export class SessionsService {
       existingEmotionSession.content = updatedContent;
       await existingEmotionSession.save();
     } else {
-      console.log("didn't find emotion label session");
       // Create new emotion label session
       const lines = newContent.split('\n');
       const metadataLines = lines.slice(0, 11);

@@ -11,13 +11,13 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { SessionsService } from './sessions.service';
+import { TrackableObjectsService } from './trackable-objects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('trackable-objects')
 @UseGuards(JwtAuthGuard)
 export class TrackableObjectsController {
-  constructor(private readonly sessionsService: SessionsService) {}
+  constructor(private readonly trackableObjectsService: TrackableObjectsService) {}
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('jsonFile'))
@@ -38,7 +38,7 @@ export class TrackableObjectsController {
 
     const content = file.buffer.toString();
     
-    return this.sessionsService.createTrackableObjects(
+    return this.trackableObjectsService.create(
       req.user.sub,
       content
     );
@@ -46,6 +46,6 @@ export class TrackableObjectsController {
 
   @Get()
   async findAll(@Request() req: any) {
-    return this.sessionsService.getTrackableObjects(req.user.sub);
+    return this.trackableObjectsService.findAllByUserId(req.user.sub);
   }
 } 
